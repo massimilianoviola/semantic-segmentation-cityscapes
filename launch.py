@@ -89,15 +89,13 @@ transform_crop = A.Compose([
     A.Lambda(name = "to_tensor", image = to_tensor),
 ])
 transform_full = A.Compose([
-    A.RandomCrop(N_SIZE_PATCH, N_SIZE_PATCH),
     A.Lambda(name = "image_preprocessing", image = preprocess_input),
     A.Lambda(name = "to_tensor", image = to_tensor),
 ])
 # setup datasets
 dataset_training = DatasetCityscapesSemantic(
     root = P_DIR_DATA,
-    # split = "train",  # TODO CHANGE!!!
-    split = "val",
+    split = "train",
     mode = "fine",
     transform = transform_crop,
 )
@@ -109,8 +107,7 @@ dataset_validation = DatasetCityscapesSemantic(
 )
 dataset_test = DatasetCityscapesSemantic(
     root = P_DIR_DATA,
-    # split = "test",  # TODO CHANGE!!!
-    split = "val",
+    split = "test",
     mode = "fine",
     transform = transform_full,
 )
