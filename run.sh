@@ -1,0 +1,5 @@
+export PYTHONUNBUFFERED=1
+export CUDA_VISIBLE_DEVICES="1"
+export PYTHONHASHSEED=0
+
+python3 ./launch.py
