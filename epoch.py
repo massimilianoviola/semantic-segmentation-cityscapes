@@ -148,7 +148,7 @@ class Epoch:
                         "_gtFine_labelIds.png",
                         "_gtFine_predictionIds.png",
                     )
-                    fn_prediction_rgb = fn_target.replace(
+                    fn_prediction_color = fn_target.replace(
                         "_gtFine_labelIds.png",
                         "_gtFine_color.png",
                     )
@@ -156,21 +156,26 @@ class Epoch:
                         self.p_dir_export,
                         fn_prediction_id,
                     )
-                    p_export_prediction_rgb = os.path.join(
+                    p_export_prediction_color = os.path.join(
                         self.p_dir_export,
-                        fn_prediction_rgb,
+                        fn_prediction_color,
                     )
                     # convert prediction values from train_id to id
                     arr_prediction_id = dataloader.dataset.convert_trainid2id(
                         arr_pred[i_image].transpose(1, 2, 0)
                     )
                     # convert prediction values from train_id to color
-                    arr_prediction_rgb = dataloader.dataset.convert_trainid2color(
+                    arr_prediction_color = dataloader.dataset.convert_trainid2color(
                         arr_pred[i_image].transpose(1, 2, 0)
+                    )
+                    # convert from RGB to BGR
+                    arr_prediction_color = cv2.cvtColor(
+                        arr_prediction_color,
+                        cv2.COLOR_RGB2BGR
                     )
                     # save prediction image
                     cv2.imwrite(p_export_prediction_id, arr_prediction_id)
-                    cv2.imwrite(p_export_prediction_rgb, arr_prediction_rgb)
+                    cv2.imwrite(p_export_prediction_color, arr_prediction_color)
         # compute metrics
         if self.s_phase != "test":  # if valid target is available
             logs["iou_score"] = smp.metrics.functional.iou_score(
