@@ -8,6 +8,7 @@ import os
 from glob import glob
 from epoch import *
 from dataset_cityscapes import *
+from torch.utils.tensorboard import SummaryWriter
 
 
 def to_tensor(x, **kwargs):
@@ -20,14 +21,19 @@ cv2.setNumThreads(0)
 cv2.ocl.setUseOpenCL(False)
 # p_* stands for "path"
 S_EXPERIMENT = "EfficientNetB0"
-P_DIR_DATA = "/data/othrys5-space/data/henr_co/Image_Video_Understanding/Datasets/Cityscapes"
+P_DIR_DATA = "/data/othrys4-space/data/henr_co/Image_Video_Understanding/Datasets/Cityscapes"
 P_DIR_CKPT = os.path.join(
-    "/data/othrys5-space/data/henr_co/Image_Video_Understanding",
+    "/data/othrys4-space/data/henr_co/Image_Video_Understanding",
     S_EXPERIMENT,
     "Checkpoints",
 )
+P_DIR_LOGS = os.path.join(
+    "/data/othrys4-space/data/henr_co/Image_Video_Understanding",
+    S_EXPERIMENT,
+    "Logs",
+)
 P_DIR_EXPORT = os.path.join(
-    "/data/othrys5-space/data/henr_co/Image_Video_Understanding",
+    "/data/othrys4-space/data/henr_co/Image_Video_Understanding",
     S_EXPERIMENT,
     "Export",
 )
@@ -41,7 +47,7 @@ N_SIZE_BATCH_TRAINING = 6  # training batch size
 N_SIZE_BATCH_VALIDATION = 3  # validation batch size
 N_SIZE_BATCH_TEST = 1  # test batch size
 N_SIZE_PATCH = 512  # patch size for random crop
-N_STEP_LOG = 10  # evaluate on validation set and save model every N iterations
+N_STEP_LOG = 1  # evaluate on validation set and save model every N iterations
 N_WORKERS = 16  # 16 works best on an RTX Titan, to be adapted for each system
 # other notations:
 # l_* stands for "list"
@@ -135,14 +141,23 @@ loss = torch.nn.CrossEntropyLoss()
 loss.__name__ = 'ce_loss'
 # setup optimizer
 optimizer = torch.optim.Adam([
-    dict(params = model.parameters(), lr = 0.0001),
+    dict(params = model.parameters(), lr = 1e-3),
 ])
 # setup learning rate scheduler
 # (here exponential decay that reaches initial_lr / 1000 after N_EPOCH_MAX)
 scheduler = torch.optim.lr_scheduler.ExponentialLR(
     optimizer = optimizer,
-    gamma = 0.001 ** (1 / N_EPOCH_MAX),
+    gamma = 1e-2 ** (1 / N_EPOCH_MAX),
     last_epoch = -1,
+)
+# setup Tensorboard logs writer
+os.makedirs(os.path.join(P_DIR_LOGS, "Training"), exist_ok = True)
+os.makedirs(os.path.join(P_DIR_LOGS, "Validation"), exist_ok = True)
+writer_training = SummaryWriter(
+    log_dir = os.path.join(P_DIR_LOGS, "Training")
+)
+writer_validation = SummaryWriter(
+    log_dir = os.path.join(P_DIR_LOGS, "Validation")
 )
 
 
@@ -156,6 +171,7 @@ epoch_training = Epoch(
     optimizer = optimizer,
     device = S_DEVICE,
     verbose = True,
+    writer = writer_training,
 )
 # initialize validation instance
 epoch_validation = Epoch(
@@ -164,6 +180,7 @@ epoch_validation = Epoch(
     loss = loss,
     device = S_DEVICE,
     verbose = True,
+    writer = writer_validation,
 )
 # start training phase
 os.makedirs(P_DIR_CKPT, exist_ok = True)
@@ -173,22 +190,27 @@ for i in range(1, N_EPOCH_MAX + 1):
     # TIP: I'm using an "f-string" below, introduced in Python 3.6
     # they're much more convenient than the old .format() method I find ;)
     print(f'Epoch: {i} | LR = {round(scheduler.get_last_lr()[0], 8)}')
-    d_log_training = epoch_training.run(loader_training)
+    d_log_training = epoch_training.run(loader_training, i_epoch = i)
     iou_score = round(d_log_training['iou_score'] * 100, 2)
     print(f'IoU = {iou_score}%')
     print()
     # log validation performance
     if i % N_STEP_LOG == 0:
-        d_log_validation = epoch_validation.run(loader_validation)
+        d_log_validation = epoch_validation.run(loader_validation, i_epoch = i)
         iou_score = round(d_log_validation['iou_score'] * 100, 2)
         print(f'IoU = {iou_score}%')
         # save model if better than previous best
         if max_score < iou_score:
             max_score = iou_score
-            torch.save(model, os.path.join(P_DIR_CKPT, f'best_model_epoch_{i:0>4}.pth'))
+            torch.save(
+                model,
+                os.path.join(P_DIR_CKPT, f'best_model_epoch_{i:0>4}.pth')
+            )
             print('Model saved!')
         print()
     scheduler.step()
+writer_training.close()
+writer_validation.close()
 
 
 # ======== TEST ======== #
