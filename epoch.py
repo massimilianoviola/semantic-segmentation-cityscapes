@@ -3,7 +3,6 @@ import sys
 from tqdm import tqdm as tqdm
 import os
 import cv2
-from util import *
 import torch
 
 
@@ -16,7 +15,8 @@ class Epoch:
         s_phase = "test",
         p_dir_export = None,
         device = "cpu",
-        verbose = True
+        verbose = True,
+        writer = None,
     ):
         self.model = model
         self.loss = loss
@@ -30,6 +30,7 @@ class Epoch:
         self.p_dir_export = p_dir_export
         self.device = device
         self.verbose = verbose
+        self.writer = writer
         self._to_device()
 
     def _to_device(self):
@@ -67,7 +68,7 @@ class Epoch:
         else:  # assume "validation " or "test"
             self.model.eval()
 
-    def run(self, dataloader):
+    def run(self, dataloader, i_epoch):
         self.on_epoch_start()
         logs = {}
         n_iteration_sum = 0
@@ -94,7 +95,8 @@ class Epoch:
                 if self.s_phase != "test":  # if valid target is available
                     # perform inference, with or without optimization
                     target = target.to(self.device)
-                    loss, prediction = self.batch_update(image, target)
+                    loss, logits = self.batch_update(image, target)
+                    prediction = logits.argmax(axis = 1, keepdim = True)
                     # update loss logs
                     loss_value = loss.cpu().detach().numpy()
                     l_loss_sum += loss_value
@@ -107,7 +109,7 @@ class Epoch:
                         iterator.set_postfix_str(s)
                     # update confusion matrix
                     tp, fp, fn, tn = smp.metrics.get_stats(
-                        prediction.argmax(axis = 1),
+                        prediction.squeeze(dim = 1),
                         target,
                         mode = 'multiclass',
                         num_classes = 19,
@@ -136,11 +138,7 @@ class Epoch:
                 # (skip if no export path was given [default])
                 if self.p_dir_export is None:
                     continue
-                arr_pred = torch.argmax(
-                    prediction,
-                    dim = 1,
-                    keepdim = True,
-                ).detach().cpu().numpy()
+                arr_prediction = prediction.detach().cpu().numpy()
                 for i_image, p_target in enumerate(l_p_target):
                     # get target filename
                     fn_target = os.path.basename(p_target)
@@ -162,11 +160,11 @@ class Epoch:
                     )
                     # convert prediction values from train_id to id
                     arr_prediction_id = dataloader.dataset.convert_trainid2id(
-                        arr_pred[i_image].transpose(1, 2, 0)
+                        arr_prediction[i_image].transpose(1, 2, 0)
                     )
                     # convert prediction values from train_id to color
                     arr_prediction_color = dataloader.dataset.convert_trainid2color(
-                        arr_pred[i_image].transpose(1, 2, 0)
+                        arr_prediction[i_image].transpose(1, 2, 0)
                     )
                     # convert from RGB to BGR
                     arr_prediction_color = cv2.cvtColor(
@@ -185,4 +183,43 @@ class Epoch:
                 tn = d_confusion["tn"],
                 reduction = 'macro-imagewise'
             ).detach().cpu().numpy()
+        # write logs to Tensorboard
+        if self.writer is not None:
+            self.writer.add_scalar(
+                f'Losses/{self.loss.__name__}',
+                logs[self.loss.__name__],
+                i_epoch,
+            )
+            self.writer.add_scalar(
+                "Metrics/IoU",
+                logs["iou_score"],
+                i_epoch,
+            )
+            # TODO finish imnplementation of image logs
+            # # using last computed batch for image logs
+            # # (color conversion is by far not optimal, to be improved)
+            # arr_prediction = prediction.detach().cpu().numpy()
+            # arr_prediction = dataloader.dataset.convert_trainid2color_nchw(
+            #     arr_prediction
+            # )
+            # self.writer.add_images(
+            #     "Predictions/Color",
+            #     img_tensor = torch.tensor(arr_prediction),
+            #     global_step = i_epoch,
+            # )
+            # arr_target = target.detach().cpu().numpy()
+            # arr_target = dataloader.dataset.convert_trainid2color_nchw(
+            #     arr_target
+            # )
+            # self.writer.add_images(
+            #     "Targets/Color",
+            #     img_tensor = torch.tensor(arr_target),
+            #     global_step = i_epoch,
+            # )
+            # self.writer.add_images(
+            #     "Images/Color",
+            #     img_tensor = image * 255,  # approximate de-normalization
+            #     global_step = i_epoch,
+            # )
+            self.writer.flush()
         return logs
