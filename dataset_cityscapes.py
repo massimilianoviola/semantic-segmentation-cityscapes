@@ -1,6 +1,7 @@
 import torchvision
 import numpy as np
 import cv2
+import pdb
 
 
 class DatasetCityscapesSemantic(torchvision.datasets.Cityscapes):
@@ -55,6 +56,14 @@ class DatasetCityscapesSemantic(torchvision.datasets.Cityscapes):
         image_color = np.zeros((height, width, 3), dtype=np.uint8)
         for class_id, class_trainid in self.colormap_trainid2id.items():
             image_color[image_trainid.squeeze() == class_trainid] = self.classes[class_id].color
+        return image_color
+    
+    def convert_trainid2color_nchw(self, image_trainid):
+        n_patch, _, height, width = image_trainid.shape
+        image_color = np.zeros((n_patch, 3, height, width), dtype=np.uint8)
+        for class_id, class_trainid in self.colormap_trainid2id.items():
+            for i_channel in range(3):
+                image_color[:, i_channel][image_trainid.squeeze() == class_trainid] = self.classes[class_id].color[i_channel]
         return image_color
 
     def __getitem__(self, index):
