@@ -4,6 +4,7 @@ from tqdm import tqdm as tqdm
 import os
 import cv2
 import torch
+import lookup_table as lut
 
 
 class Epoch:
@@ -68,7 +69,7 @@ class Epoch:
         else:  # assume "validation " or "test"
             self.model.eval()
 
-    def run(self, dataloader, i_epoch):
+    def run(self, dataloader, i_epoch = -1):
         self.on_epoch_start()
         logs = {}
         n_iteration_sum = 0
@@ -94,7 +95,14 @@ class Epoch:
                 image = image.to(self.device)
                 if self.s_phase != "test":  # if valid target is available
                     # perform inference, with or without optimization
-                    target = target.to(self.device)
+                    # convert target values from indices (id) to training indices (train_id)
+                    target = target.unsqueeze(dim = 1).to(self.device)
+                    target = lut.lookup_nchw(
+                        td_u_input = target,
+                        td_i_lut = dataloader.dataset.th_i_lut_id2trainid,
+                    )
+                    target.squeeze_(dim = 1)
+                    target = target.long()
                     loss, logits = self.batch_update(image, target)
                     prediction = logits.argmax(axis = 1, keepdim = True)
                     # update loss logs
@@ -133,12 +141,12 @@ class Epoch:
                     else:
                         d_confusion["tn"] += tn.sum(dim = 0, keepdim = True)
                 else:  # in test phase, no target available
-                    _, prediction = self.batch_update(image)
+                    _, logits = self.batch_update(image)
+                    prediction = logits.argmax(axis = 1, keepdim = True)
                 # export individual predictions as images
                 # (skip if no export path was given [default])
                 if self.p_dir_export is None:
                     continue
-                arr_prediction = prediction.detach().cpu().numpy()
                 for i_image, p_target in enumerate(l_p_target):
                     # get target filename
                     fn_target = os.path.basename(p_target)
@@ -159,21 +167,25 @@ class Epoch:
                         fn_prediction_color,
                     )
                     # convert prediction values from train_id to id
-                    arr_prediction_id = dataloader.dataset.convert_trainid2id(
-                        arr_prediction[i_image].transpose(1, 2, 0)
-                    )
+                    prediction_id = lut.lookup_chw(
+                        td_u_input = prediction[i_image].byte(),
+                        td_i_lut = dataloader.dataset.th_i_lut_trainid2id,
+                    ).permute((1, 2, 0))
+                    ar_f_prediction_id = prediction_id.detach().cpu().numpy()
                     # convert prediction values from train_id to color
-                    arr_prediction_color = dataloader.dataset.convert_trainid2color(
-                        arr_prediction[i_image].transpose(1, 2, 0)
-                    )
+                    prediction_color = lut.lookup_chw(
+                        td_u_input = prediction[i_image].byte(),
+                        td_i_lut = dataloader.dataset.th_i_lut_trainid2color,
+                    ).permute((1, 2, 0))
+                    ar_f_prediction_color = prediction_color.detach().cpu().numpy()
                     # convert from RGB to BGR
-                    arr_prediction_color = cv2.cvtColor(
-                        arr_prediction_color,
-                        cv2.COLOR_RGB2BGR
+                    ar_f_prediction_color = cv2.cvtColor(
+                        ar_f_prediction_color,
+                        cv2.COLOR_RGB2BGR,
                     )
                     # save prediction image
-                    cv2.imwrite(p_export_prediction_id, arr_prediction_id)
-                    cv2.imwrite(p_export_prediction_color, arr_prediction_color)
+                    cv2.imwrite(p_export_prediction_id, ar_f_prediction_id)
+                    cv2.imwrite(p_export_prediction_color, ar_f_prediction_color)
         # compute metrics
         if self.s_phase != "test":  # if valid target is available
             logs["iou_score"] = smp.metrics.functional.iou_score(
@@ -195,31 +207,28 @@ class Epoch:
                 logs["iou_score"],
                 i_epoch,
             )
-            # TODO finish imnplementation of image logs
-            # # using last computed batch for image logs
-            # # (color conversion is by far not optimal, to be improved)
-            # arr_prediction = prediction.detach().cpu().numpy()
-            # arr_prediction = dataloader.dataset.convert_trainid2color_nchw(
-            #     arr_prediction
-            # )
-            # self.writer.add_images(
-            #     "Predictions/Color",
-            #     img_tensor = torch.tensor(arr_prediction),
-            #     global_step = i_epoch,
-            # )
-            # arr_target = target.detach().cpu().numpy()
-            # arr_target = dataloader.dataset.convert_trainid2color_nchw(
-            #     arr_target
-            # )
-            # self.writer.add_images(
-            #     "Targets/Color",
-            #     img_tensor = torch.tensor(arr_target),
-            #     global_step = i_epoch,
-            # )
-            # self.writer.add_images(
-            #     "Images/Color",
-            #     img_tensor = image * 255,  # approximate de-normalization
-            #     global_step = i_epoch,
-            # )
+            # use last computed batch for generating image logs (max. 4 images)
+            self.writer.add_images(
+                "Predictions/Color",
+                img_tensor = lut.lookup_nchw(
+                    td_u_input = prediction[:4].byte(),
+                    td_i_lut = dataloader.dataset.th_i_lut_trainid2color,
+                ),
+                global_step = i_epoch,
+            )
+            self.writer.add_images(
+                "Targets/Color",
+                img_tensor = lut.lookup_nchw(
+                    td_u_input = target[:4].unsqueeze(dim = 1).byte(),
+                    td_i_lut = dataloader.dataset.th_i_lut_trainid2color,
+                ),
+                global_step = i_epoch,
+            )
+            self.writer.add_images(
+                "Images/Color",
+                # approximate de-normalization
+                img_tensor = ((image[:4] + 2) * 64).round().clamp(0, 255).byte(),
+                global_step = i_epoch,
+            )
             self.writer.flush()
         return logs
