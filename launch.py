@@ -42,12 +42,12 @@ S_DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 S_NAME_ENCODER = "efficientnet-b0"
 S_NAME_WEIGHTS = "imagenet"
 # n_* stands for n-dim size (0-dim: number of objects, 1-dim+: shape)
-N_EPOCH_MAX = 100  # 50
-N_SIZE_BATCH_TRAINING = 6  # training batch size
-N_SIZE_BATCH_VALIDATION = 3  # validation batch size
+N_EPOCH_MAX = 60  # 50
+N_SIZE_BATCH_TRAINING = 24  # training batch size
+N_SIZE_BATCH_VALIDATION = 12  # validation batch size
 N_SIZE_BATCH_TEST = 1  # test batch size
 N_SIZE_PATCH = 512  # patch size for random crop
-N_STEP_LOG = 1  # evaluate on validation set and save model every N iterations
+N_STEP_LOG = 5  # evaluate on validation set and save model every N iterations
 N_WORKERS = 16  # 16 works best on an RTX Titan, to be adapted for each system
 # other notations:
 # l_* stands for "list"
@@ -104,18 +104,21 @@ dataset_training = DatasetCityscapesSemantic(
     split = "train",
     mode = "fine",
     transform = transform_crop,
+    device = S_DEVICE,
 )
 dataset_validation = DatasetCityscapesSemantic(
     root = P_DIR_DATA,
     split = "val",
     mode = "fine",
     transform = transform_full,
+    device = S_DEVICE,
 )
 dataset_test = DatasetCityscapesSemantic(
     root = P_DIR_DATA,
     split = "test",
     mode = "fine",
     transform = transform_full,
+    device = S_DEVICE,
 )
 # setup data loaders
 loader_training = DataLoader(
@@ -141,14 +144,14 @@ loss = torch.nn.CrossEntropyLoss()
 loss.__name__ = 'ce_loss'
 # setup optimizer
 optimizer = torch.optim.Adam([
-    dict(params = model.parameters(), lr = 1e-3),
+    dict(params = model.parameters(), lr = 5e-4),
 ])
 # setup learning rate scheduler
 # (here exponential decay that reaches initial_lr / 1000 after N_EPOCH_MAX)
-scheduler = torch.optim.lr_scheduler.ExponentialLR(
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
     optimizer = optimizer,
-    gamma = 1e-2 ** (1 / N_EPOCH_MAX),
-    last_epoch = -1,
+    T_max = N_EPOCH_MAX,
+    eta_min = 1e-6,
 )
 # setup Tensorboard logs writer
 os.makedirs(os.path.join(P_DIR_LOGS, "Training"), exist_ok = True)
