@@ -57,14 +57,14 @@ def get_lookup_table(
     if n_key != n_val:
         raise ValueError(
             f'Number of keys and values should be the same:'
-            f'\n- {ar_u_key.shape[0]=} (n_key)'
-            f'\n- {ar_u_val.shape[0]=} (n_val)'
+            f'\n- ar_u_key.shape[0] = {ar_u_key.shape[0]} (n_key)'
+            f'\n- ar_u_val.shape[0] = {ar_u_val.shape[0]} (n_val)'
         )
     if ar_u_key.dtype != np.uint8 or ar_u_val.dtype != np.uint8:
         raise ValueError(
             f'Both ar_u_key and ar_u_val should be of dtype np.uint8:'
-            f'\n- {ar_u_key.dtype=}'
-            f'\n- {ar_u_val.dtype=}'
+            f'\n- ar_u_key.dtype = {ar_u_key.dtype}'
+            f'\n- ar_u_val.dtype = {ar_u_val.dtype}'
         )
     # for each index in ar_u_key corresponds a value in ar_u_val
     # for indexes not in ar_u_key, the corresponding value is set to v_default
@@ -116,10 +116,10 @@ def lookup_chw(
     ):
         raise ValueError(
             f'Incompatible dimensions, dtypes or devices for LuT or input:'
-            f'\n- {td_i_lut.dtype=}, expected torch.int32'
-            f'\n- {td_u_input.dtype=}, expected torch.uint8'
-            f'\n- {td_u_input.ndim=}, expected 3'
-            f'\n- {td_u_input.device=} should be the same as {td_i_lut.device=}'
+            f'\n- td_i_lut.dtype = {td_i_lut.dtype}, expected torch.int32'
+            f'\n- td_u_input.dtype = {td_u_input.dtype}, expected torch.uint8'
+            f'\n- td_u_input.ndim = {td_u_input.ndim}, expected 3'
+            f'\n- td_u_input.device = {td_u_input.device} should be the same as td_i_lut.device = {td_i_lut.device}'
         )
     # encode colors into lookup keys
     # requires a multiplier for each channel: [256^0, 256^1, ..., 256^n_chn]
@@ -177,10 +177,10 @@ def lookup_nchw(
     ):
         raise ValueError(
             f'Incompatible dimensions, dtypes or devices for LuT or input:'
-            f'\n- {td_i_lut.dtype=}, expected torch.int32'
-            f'\n- {td_u_input.dtype=}, expected torch.uint8'
-            f'\n- {td_u_input.ndim=}, expected 4'
-            f'\n- {td_u_input.device=} should be the same as {td_i_lut.device=}'
+            f'\n- td_i_lut.dtype = {td_i_lut.dtype}, expected torch.int32'
+            f'\n- td_u_input.dtype = {td_u_input.dtype}, expected torch.uint8'
+            f'\n- td_u_input.ndim = {td_u_input.ndim}, expected 4'
+            f'\n- td_u_input.device = {td_u_input.device} should be the same as td_i_lut.device = {td_i_lut.device}'
         )
     # encode colors into lookup keys
     # requires a multiplier for each channel: [256^0, 256^1, ..., 256^n_chn]
