@@ -1,70 +1,55 @@
 import torchvision
 import numpy as np
 import cv2
+import lookup_table as lut
 import pdb
 
 
 class DatasetCityscapesSemantic(torchvision.datasets.Cityscapes):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, device, *args, **kwargs):
         super().__init__(*args, **kwargs, target_type = "semantic")
-        # TODO: check validity of comment below
-        # TIP: I removed the whole target_type index search as the class is now
-        # hard-coded for semantic segmentation (somehow the parameters passing
-        # of *args and **kwargs failed with py3.10 and the solution was
-        # equivalent to removing the passing of target_type)
-        self.colormap_id2trainid = self._generate_colormap_id2trainid()
-        self.colormap_trainid2id = self._generate_colormap_trainid2id()
-
-    def _generate_colormap_id2trainid(self):
-        colormap = {}
-        for class_ in self.classes:
-            if class_.train_id in (-1, 255):
+        self.device = device
+        # setup lookup tables for class/color conversions
+        l_key_id, l_key_trainid, l_key_color = self._get_class_properties()
+        ar_u_key_id = np.asarray(l_key_id, dtype = np.uint8)
+        ar_u_key_trainid = np.asarray(l_key_trainid, dtype = np.uint8)
+        ar_u_key_color = np.asarray(l_key_color, dtype = np.uint8)
+        _, self.th_i_lut_id2trainid = lut.get_lookup_table(
+            ar_u_key = ar_u_key_id,
+            ar_u_val = ar_u_key_trainid,
+            v_val_default = 19,  # default class is 19 - background
+            device = self.device,
+        )
+        _, self.th_i_lut_trainid2id = lut.get_lookup_table(
+            ar_u_key = ar_u_key_trainid,
+            ar_u_val = ar_u_key_id,
+            v_val_default = 0,  # default class is 0 - unlabeled
+            device = self.device,
+        )
+        _, self.th_i_lut_trainid2color = lut.get_lookup_table(
+            ar_u_key = ar_u_key_trainid,
+            ar_u_val = ar_u_key_color,
+            v_val_default = 0,  # default color is black
+            device = self.device,
+        )
+        
+    def _get_class_properties(self):
+        # iterate over named tuples (nt)
+        l_key_id = list()
+        l_key_trainid = list()
+        l_key_color = list()
+        # append classes
+        for nt_class in self.classes:
+            if nt_class.train_id in [-1, 255]:
                 continue
-            colormap[class_.train_id] = class_.id
-        return colormap
-
-    def _generate_colormap_trainid2id(self):
-        colormap = {}
-        colormap[0] = 255
-        for class_ in self.classes:
-            if class_.train_id in (-1, 255):
-                continue
-            colormap[class_.id] = class_.train_id
-        return colormap
-
-    # formerly called _convert_to_segmentation_mask()
-    def convert_id2trainid(self, image_id):
-        height, width = image_id.shape[:2]
-        # generate default segmentation mask filled with class 19 (background)
-        image_trainid = np.full((height, width), len(self.colormap_id2trainid))
-        # overwrite pixel with values corresponding to each class mask
-        for class_trainid, class_id in self.colormap_id2trainid.items():
-            image_trainid[image_id == class_id] = class_trainid
-        return image_trainid
-    
-    def convert_trainid2id(self, image_trainid):
-        height, width = image_trainid.shape[:2]
-        # generate default segmentation mask filled with class 19 (background)
-        image_id = np.zeros((height, width, 1), dtype = np.float32)
-        # overwrite pixel with values corresponding to each class mask
-        for class_id, class_trainid in self.colormap_trainid2id.items():
-            image_id[image_trainid == class_trainid] = class_id
-        return image_id
-
-    def convert_trainid2color(self, image_trainid):
-        height, width = image_trainid.shape[:2]
-        image_color = np.zeros((height, width, 3), dtype=np.uint8)
-        for class_id, class_trainid in self.colormap_trainid2id.items():
-            image_color[image_trainid.squeeze() == class_trainid] = self.classes[class_id].color
-        return image_color
-    
-    def convert_trainid2color_nchw(self, image_trainid):
-        n_patch, _, height, width = image_trainid.shape
-        image_color = np.zeros((n_patch, 3, height, width), dtype=np.uint8)
-        for class_id, class_trainid in self.colormap_trainid2id.items():
-            for i_channel in range(3):
-                image_color[:, i_channel][image_trainid.squeeze() == class_trainid] = self.classes[class_id].color[i_channel]
-        return image_color
+            l_key_id.append([nt_class.id])
+            l_key_trainid.append([nt_class.train_id])
+            l_key_color.append(nt_class.color)
+        # append class background
+        l_key_id.append([0])
+        l_key_trainid.append([19])
+        l_key_color.append([0,0,0])
+        return l_key_id, l_key_trainid, l_key_color
 
     def __getitem__(self, index):
         # read images
@@ -73,8 +58,6 @@ class DatasetCityscapesSemantic(torchvision.datasets.Cityscapes):
         image = cv2.imread(p_image)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         target = cv2.imread(p_target, cv2.IMREAD_UNCHANGED)
-        # convert target values from indices (id) to training indices (train_id)
-        target = self.convert_id2trainid(target)
         if self.transform is not None:
             transformed = self.transform(image = image, mask = target)
             image = transformed["image"]
