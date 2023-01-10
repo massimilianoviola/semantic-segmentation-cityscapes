@@ -96,13 +96,14 @@ class Epoch:
                 if self.s_phase != "test":  # if valid target is available
                     # perform inference, with or without optimization
                     # convert target values from indices (id) to training indices (train_id)
-                    target = target.unsqueeze(dim = 1).to(self.device)
+                    target = target.unsqueeze(dim = 1).to(dataloader.dataset.device)
                     target = lut.lookup_nchw(
                         td_u_input = target,
                         td_i_lut = dataloader.dataset.th_i_lut_id2trainid,
                     )
                     target.squeeze_(dim = 1)
                     target = target.long()
+                    target = target.to(self.device)
                     loss, logits = self.batch_update(image, target)
                     prediction = logits.argmax(axis = 1, keepdim = True)
                     # update loss logs
@@ -147,6 +148,8 @@ class Epoch:
                 # (skip if no export path was given [default])
                 if self.p_dir_export is None:
                     continue
+                if prediction.device != dataloader.dataset.device:
+                    prediction = prediction.to(dataloader.dataset.device)
                 for i_image, p_target in enumerate(l_p_target):
                     # get target filename
                     fn_target = os.path.basename(p_target)
