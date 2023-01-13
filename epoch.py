@@ -54,13 +54,14 @@ class Epoch:
             return loss, prediction
         elif self.s_phase == "validation":
             # perform inference and loss evaluation
-            with torch.no_grad():
+            with torch.inference_mode():
                 prediction = self.model.forward(image)
                 loss = self.loss(prediction, target)
             return loss, prediction
         else:  # assume "test"
             # perform inference only
-            prediction = self.model.forward(image)
+            with torch.inference_mode():
+                prediction = self.model.forward(image)
             return None, prediction
 
     def on_epoch_start(self):
