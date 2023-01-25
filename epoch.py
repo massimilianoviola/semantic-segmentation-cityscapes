@@ -1,6 +1,6 @@
 import segmentation_models_pytorch as smp
 import sys
-from tqdm import tqdm as tqdm
+from tqdm import tqdm
 import os
 import cv2
 import torch
@@ -33,16 +33,16 @@ class Epoch:
         self.verbose = verbose
         self.writer = writer
         self._to_device()
-
+    
     def _to_device(self):
         self.model.to(self.device)
         self.loss.to(self.device)
-
+    
     def _format_logs(self, logs):
         str_logs = ["{} - {:.4}".format(k, v) for k, v in logs.items()]
         s = ", ".join(str_logs)
         return s
-
+    
     def batch_update(self, image, target = None):
         if self.s_phase == "training":
             # perform inference, optimization and loss evaluation
@@ -63,13 +63,13 @@ class Epoch:
             with torch.inference_mode():
                 prediction = self.model.forward(image)
             return None, prediction
-
+    
     def on_epoch_start(self):
         if self.s_phase == "training":
             self.model.train()
         else:  # assume "validation " or "test"
             self.model.eval()
-
+    
     def run(self, dataloader, i_epoch = -1):
         self.on_epoch_start()
         logs = {}
@@ -121,7 +121,7 @@ class Epoch:
                     tp, fp, fn, tn = smp.metrics.get_stats(
                         prediction.squeeze(dim = 1),
                         target,
-                        mode = 'multiclass',
+                        mode = "multiclass",
                         num_classes = 19,
                         ignore_index = 19,
                     )
@@ -197,12 +197,12 @@ class Epoch:
                 fp = d_confusion["fp"],
                 fn = d_confusion["fn"],
                 tn = d_confusion["tn"],
-                reduction = 'macro-imagewise'
+                reduction = "macro-imagewise"
             ).detach().cpu().numpy()
         # write logs to Tensorboard
         if self.writer is not None:
             self.writer.add_scalar(
-                f'Losses/{self.loss.__name__}',
+                f"Losses/{self.loss.__name__}",
                 logs[self.loss.__name__],
                 i_epoch,
             )

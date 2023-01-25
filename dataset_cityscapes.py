@@ -2,7 +2,6 @@ import torchvision
 import numpy as np
 import cv2
 import lookup_table as lut
-import pdb
 
 
 class DatasetCityscapesSemantic(torchvision.datasets.Cityscapes):
@@ -32,7 +31,7 @@ class DatasetCityscapesSemantic(torchvision.datasets.Cityscapes):
             v_val_default = 0,  # default color is black
             device = self.device,
         )
-        
+    
     def _get_class_properties(self):
         # iterate over named tuples (nt)
         l_key_id = list()
@@ -48,9 +47,9 @@ class DatasetCityscapesSemantic(torchvision.datasets.Cityscapes):
         # append class background
         l_key_id.append([0])
         l_key_trainid.append([19])
-        l_key_color.append([0,0,0])
+        l_key_color.append([0, 0, 0])
         return l_key_id, l_key_trainid, l_key_color
-
+    
     def __getitem__(self, index):
         # read images
         p_image = self.images[index]

@@ -3,6 +3,7 @@ import cv2
 import glob
 import numpy as np
 import torch
+import os
 from segmentation_models_pytorch.encoders import get_preprocessing_fn
 from tqdm import tqdm
 from dataset_cityscapes import *
@@ -15,13 +16,15 @@ def to_tensor(x, **kwargs):
 # ======== CONFIGURATION ======== #
 
 S_NAME_CITY = "berlin" # if using test dataset, one of: berlin, bielefeld, bonn, leverkusen, mainz, munich
-S_NAME_ENCODER = "efficientnet-b0"
+S_NAME_ENCODER = "efficientnet-b4"
 S_NAME_WEIGHTS = "imagenet"
-P_DIR_MODEL = "/kaggle/input/EfficientNetB0/Checkpoints/best_model_epoch_0060.pth"
-P_DIR_DATA = "/kaggle/input/cityscapes/cityscapes"
-P_OUTPUT_VIDEO= f"/kaggle/working/{S_NAME_CITY}.avi"
+P_DIR_MODEL = "/Workspace/DeepLabV3+_EfficientNetB4_CE/Checkpoints/best_model_epoch_0060.pth"
+P_DIR_DATA = "/Workspace/Datasets/Cityscapes"
+P_VIDEO_DIR = "/Workspace/Videos/"
+os.makedirs(P_VIDEO_DIR, exist_ok = True)
+P_OUTPUT_VIDEO= os.path.join(P_VIDEO_DIR, f"{S_NAME_CITY}.avi")  # output video name
 
-N_IMAGES = 10
+N_IMAGES = 20
 FPS = 2
 
 # cityscapes image size
@@ -34,7 +37,7 @@ LEGEND_HEIGHT = 100
 DESC_WIDTH = IMAGE_WIDTH * 2
 DESC_HEIGHT = 50
 
-S_DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+S_DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 # ======== SETUP ======== #
@@ -119,7 +122,7 @@ for img in tqdm(image_paths[:N_IMAGES]):
     img_concat = cv2.cvtColor(img_concat, cv2.COLOR_RGB2BGR)
     # add legend on top of the two
     img_concat = cv2.vconcat([legend, img_concat])
-
+    
     # add description
     background = np.full((DESC_HEIGHT, DESC_WIDTH, 3), 100, dtype=np.uint8)
     desc = f"City: {S_NAME_CITY}    Model: {P_DIR_MODEL}    Frame: {img}"
